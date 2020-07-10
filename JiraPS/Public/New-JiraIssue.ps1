@@ -60,7 +60,7 @@ function New-JiraIssue {
 
         $createmeta = Get-JiraIssueCreateMetadata -Project $Project -IssueType $IssueType -Credential $Credential -ErrorAction Stop -Debug:$false
 
-        $resourceURi = "$server/rest/api/2/issue"
+        $resourceURi = "$server/rest/api/3/issue"
 
         Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] ParameterSetName: $($PsCmdlet.ParameterSetName)"
         Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] PSBoundParameters: $($PSBoundParameters | Out-String)"
@@ -93,11 +93,7 @@ function New-JiraIssue {
         }
 
         if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey("Reporter")) {
-            $requestBody["reporter"] = @{"name" = "$Reporter"}
-        }
-        elseif ($ProjectObj.Style -eq "next-gen"){
-            Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] Adding reporter as next-gen projects must have reporter set."
-            $requestBody["reporter"] = @{"name" = "$((Get-JiraUser -Credential $Credential).Name)"}
+            $requestBody["reporter"] = @{"accountId" = "$((get-ufgjirauser -username $Reporter -Credential $Credential).accountid)"}
         }
 
         if ($Parent) {
@@ -143,7 +139,7 @@ function New-JiraIssue {
 
         Write-Verbose "[$($MyInvocation.MyCommand.Name)] Validating fields with metadata"
         foreach ($c in $createmeta) {
-            Write-Debug "[$($MyInvocation.MyCommand.Name)] Checking metadata for `$c [$c]"
+            Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] Checking metadata for `$c [$c]"
             if ($c.Required) {
                 if ($requestBody.ContainsKey($c.Id)) {
                     Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] Required field (id=[$($c.Id)], name=[$($c.Name)]) was provided (value=[$($requestBody.$($c.Id))])"
@@ -159,7 +155,7 @@ function New-JiraIssue {
                 }
             }
             else {
-                Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] Non-required field (id=[$($c.Id)], name=[$($c.Name)])"
+                Write-Debug "[$($MyInvocation.MyCommand.Name)] Non-required field (id=[$($c.Id)], name=[$($c.Name)]"
             }
         }
 
@@ -173,6 +169,7 @@ function New-JiraIssue {
             Body       = (ConvertTo-Json -InputObject ([PSCustomObject]$hashtable) -Depth 7)
             Credential = $Credential
         }
+        $parameter.body
         Write-Debug "[$($MyInvocation.MyCommand.Name)] Invoking JiraMethod with `$parameter"
         if ($PSCmdlet.ShouldProcess($Summary, "Creating new Issue on JIRA")) {
             if ($result = Invoke-JiraMethod @parameter) {

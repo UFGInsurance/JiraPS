@@ -1,129 +1,28 @@
-function Get-JiraUser {
-    # .ExternalHelp ..\JiraPS-help.xml
-    [CmdletBinding( DefaultParameterSetName = 'Self' )]
+function get-JiraUser{
     param(
-        [Parameter( Position = 0, Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'ByUserName' )]
-        [AllowEmptyString()]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
         [Alias('User', 'Name')]
         [String[]]
         $UserName,
-
-        [Parameter( Position = 0, Mandatory, ParameterSetName = 'ByInputObject' )]
-        [Object[]] $InputObject,
-
-        [Parameter( ParameterSetName = 'ByInputObject' )]
-        [Parameter( ParameterSetName = 'ByUserName' )]
-        [Switch]$Exact,
-
-        [Switch]
-        $IncludeInactive,
-
-        [Parameter( ParameterSetName = 'ByUserName' )]
-        [ValidateRange(1, 1000)]
-        [UInt32]
-        $MaxResults = 50,
-
-        [Parameter( ParameterSetName = 'ByUserName' )]
-        [ValidateNotNullOrEmpty()]
-        [UInt64]
-        $Skip = 0,
 
         [Parameter()]
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.Credential()]
         $Credential = [System.Management.Automation.PSCredential]::Empty
-    )
+        )
 
-    begin {
-        Write-Verbose "[$($MyInvocation.MyCommand.Name)] Function started"
 
-        $server = Get-JiraConfigServer -ErrorAction Stop
+        $server = Get-JiraConfigServer -ErrorAction Stop -Debug:$false
+        $resourceURi = "$server/rest/api/3/users?maxResults=2000"
 
-        $selfResourceUri = "$server/rest/api/2/myself"
-        $searchResourceUri = "$server/rest/api/2/user/search?username={0}"
-        $exactResourceUri = "$server/rest/api/2/user?username={0}"
-
-        if ($IncludeInactive) {
-            $searchResourceUri += "&includeInactive=true"
+        $parameter = @{
+            URI        = $resourceURi
+            Method     = "Get"
+            Credential = $Credential
         }
-        if ($MaxResults) {
-            $searchResourceUri += "&maxResults=$MaxResults"
-        }
-        if ($Skip) {
-            $searchResourceUri += "&startAt=$Skip"
-        }
-    }
-
-    process {
-        Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] ParameterSetName: $($PsCmdlet.ParameterSetName)"
-        Write-DebugMessage "[$($MyInvocation.MyCommand.Name)] PSBoundParameters: $($PSBoundParameters | Out-String)"
-
-        $ParameterSetName = ''
-        switch ($PsCmdlet.ParameterSetName) {
-            'ByInputObject' { $UserName = $InputObject.Name; $ParameterSetName = 'ByUserName'; $Exact = $true }
-            'ByUserName' { $ParameterSetName = 'ByUserName' }
-            'Self' { $ParameterSetName = 'Self' }
-        }
-
-        switch ($ParameterSetName) {
-            "Self" {
-                $resourceURi = $selfResourceUri
-
-                $parameter = @{
-                    URI        = $resourceURi
-                    Method     = "GET"
-                    Credential = $Credential
-                }
-                Write-Debug "[$($MyInvocation.MyCommand.Name)] Invoking JiraMethod with `$parameter"
-                $result = Invoke-JiraMethod @parameter
-
-                Get-JiraUser -UserName $result.Name -Exact
+        Write-Debug "[$($MyInvocation.MyCommand.Name)] Invoking JiraMethod with `$parameter"
+            if ($result = Invoke-JiraMethod @parameter) {
+               $result | Where-Object {$_.emailAddress -like "*$UserName*"}
             }
-            "ByInputObject" {
-                $UserName = $InputObject.Name
-
-                $PsCmdlet.ParameterSetName = "ByUserName"
-            }
-            "ByUserName" {
-                $resourceURi = if ($Exact) { $exactResourceUri } else { $searchResourceUri }
-
-                foreach ($user in $UserName) {
-                    Write-Verbose "[$($MyInvocation.MyCommand.Name)] Processing [$user]"
-                    Write-Debug "[$($MyInvocation.MyCommand.Name)] Processing `$user [$user]"
-
-                    $parameter = @{
-                        URI        = $resourceURi -f $user
-                        Method     = "GET"
-                        Credential = $Credential
-                    }
-                    Write-Debug "[$($MyInvocation.MyCommand.Name)] Invoking JiraMethod with `$parameter"
-                    if ($users = Invoke-JiraMethod @parameter) {
-                        foreach ($item in $users) {
-                            $parameter = @{
-                                URI        = "{0}&expand=groups" -f $item.self
-                                Method     = "GET"
-                                Credential = $Credential
-                            }
-                            Write-Debug "[$($MyInvocation.MyCommand.Name)] Invoking JiraMethod with `$parameter"
-                            $result = Invoke-JiraMethod @parameter
-
-                            Write-Output (ConvertTo-JiraUser -InputObject $result)
-                        }
-                    }
-                    else {
-                        $errorMessage = @{
-                            Category         = "ObjectNotFound"
-                            CategoryActivity = "Searching for user"
-                            Message          = "No results when searching for user $user"
-                        }
-                        Write-Error @errorMessage
-                    }
-                }
-            }
-        }
-    }
-
-    end {
         Write-Verbose "[$($MyInvocation.MyCommand.Name)] Complete"
-    }
-}
+        }
