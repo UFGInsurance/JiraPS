@@ -93,7 +93,7 @@ function New-JiraIssue {
         }
 
         if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey("Reporter")) {
-            $requestBody["reporter"] = @{"accountId" = "$((get-ufgjirauser -username $Reporter -Credential $Credential).accountid)"}
+            $requestBody["reporter"] = @{"accountId" = "$((get-jirauser -username $Reporter -Credential $Credential).accountid)"}
         }
 
         if ($Parent) {
