@@ -108,9 +108,9 @@ function Invoke-JiraIssueTransition {
                 $validAssignee = $true
             }
             else {
-                if ($assigneeObj = Resolve-JiraUser -InputObject $Assignee -Credential $Credential -Exact) {
+                if ($assigneeObj = (get-jirauser -username $Assignee -credential $Credential)) {
                     Write-Debug "[$($MyInvocation.MyCommand.Name)] User found (name=[$($assigneeObj.Name)],RestUrl=[$($assigneeObj.RestUrl)])"
-                    $assigneeString = $assigneeObj.Name
+                    $assigneeString = $assigneeObj.accountid
                     $validAssignee = $true
                 }
                 else {
@@ -130,7 +130,7 @@ function Invoke-JiraIssueTransition {
             $requestBody += @{
                 'fields' = @{
                     'assignee' = @{
-                        'name' = $assigneeString
+                        'accountid' = $assigneeString
                     }
                 }
             }
